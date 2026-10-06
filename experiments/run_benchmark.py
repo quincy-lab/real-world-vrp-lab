@@ -10,7 +10,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 INSTANCE = PROJECT_ROOT / "data" / "X-n101-k25.vrp"
 OUTPUT = PROJECT_ROOT / "results" / "benchmark_x-n101-k25.csv"
 
-TIME_LIMIT_SECONDS = 10
+# Four points are enough for the first runtime-quality curve without making
+# the experiment unnecessarily long. We can add 60s later.
+TIME_LIMITS = [1, 5, 10, 30]
 
 COMMON_FIELDS = [
     "instance",
@@ -34,10 +36,12 @@ def main():
 
     results = []
 
-    for name, solver in solvers:
-        print(f"\n===== Running {name} =====")
-        result = solver(INSTANCE, TIME_LIMIT_SECONDS)
-        results.append(result)
+    # Core benchmark loop: same instance and same time budgets for every solver.
+    for time_limit in TIME_LIMITS:
+        for name, solver in solvers:
+            print(f"\n===== Running {name}: {time_limit}s =====")
+            result = solver(INSTANCE, time_limit)
+            results.append(result)
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 
@@ -54,7 +58,8 @@ def main():
     print("\n=== Unified benchmark ===")
     print(
         f"{'Method':<12}"
-        f"{'Time(s)':>10}"
+        f"{'Budget(s)':>12}"
+        f"{'Actual(s)':>12}"
         f"{'Routes':>10}"
         f"{'Cost':>10}"
         f"{'Gap(%)':>12}"
@@ -63,7 +68,8 @@ def main():
     for result in results:
         print(
             f"{result['method']:<12}"
-            f"{result['runtime_s']:>10.3f}"
+            f"{result['time_limit_s']:>12}"
+            f"{result['runtime_s']:>12.3f}"
             f"{result['routes']:>10}"
             f"{result['cost']:>10}"
             f"{result['benchmark_gap_pct']:>12.3f}"
