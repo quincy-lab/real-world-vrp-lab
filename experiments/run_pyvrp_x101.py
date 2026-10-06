@@ -15,74 +15,77 @@ TIME_LIMIT_SECONDS = 10
 SEED = 42
 
 
-def main():
-    # 1) Read a standard CVRP benchmark instance.
-    # The X benchmark uses integer-rounded Euclidean distances.
-    data = read(INSTANCE, round_func="round")
+def benchmark_gap(cost, best_known=BEST_KNOWN):
+    return 100 * (cost - best_known) / best_known
 
-    # 2) Ask PyVRP to search for a good feasible solution.
+
+def solve_pyvrp(instance=INSTANCE, time_limit=TIME_LIMIT_SECONDS, seed=SEED, display=False):
+    """Solve one CVRP instance with PyVRP and return unified benchmark metrics."""
+    data = read(instance, round_func="round")
+
     result = solve(
         data,
-        stop=MaxRuntime(TIME_LIMIT_SECONDS),
-        seed=SEED,
-        display=True,
+        stop=MaxRuntime(time_limit),
+        seed=seed,
+        display=display,
     )
 
-    # 3) Extract the main experiment metrics.
-    cost = result.cost()
-    gap_pct = 100 * (cost - BEST_KNOWN) / BEST_KNOWN
-    num_routes = len(result.best.routes())
+    cost = int(result.cost())
+    routes = result.best.routes()
 
-    print("\n=== Experiment summary ===")
-    print(f"instance      : X-n101-k25")
-    print(f"customers     : {data.num_clients}")
-    print(f"routes used   : {num_routes}")
-    print(f"solution cost : {cost}")
-    print(f"best known    : {BEST_KNOWN}")
-    print(f"gap (%)       : {gap_pct:.3f}")
-    print(f"runtime (s)   : {result.runtime:.3f}")
+    return {
+        "instance": Path(instance).stem,
+        "method": "PyVRP",
+        "time_limit_s": time_limit,
+        "customers": data.num_clients,
+        "routes": len(routes),
+        "cost": cost,
+        "best_known": BEST_KNOWN,
+        "benchmark_gap_pct": benchmark_gap(cost),
+        "runtime_s": float(result.runtime),
+        "route_text": str(result.best),
+    }
 
-    # 4) Save one row that we can later compare with OR-Tools, COPT, etc.
+
+def main():
+    result = solve_pyvrp(display=True)
+
+    print("\n=== PyVRP experiment summary ===")
+    for key in [
+        "instance",
+        "customers",
+        "routes",
+        "cost",
+        "best_known",
+        "benchmark_gap_pct",
+        "runtime_s",
+    ]:
+        value = result[key]
+        if isinstance(value, float):
+            value = f"{value:.3f}"
+        print(f"{key:18}: {value}")
+
     RESULTS.parent.mkdir(parents=True, exist_ok=True)
     write_header = not RESULTS.exists()
+    csv_fields = [
+        "instance",
+        "method",
+        "time_limit_s",
+        "customers",
+        "routes",
+        "cost",
+        "best_known",
+        "benchmark_gap_pct",
+        "runtime_s",
+    ]
 
     with RESULTS.open("a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(
-            f,
-            fieldnames=[
-                "instance",
-                "method",
-                "seed",
-                "time_limit_s",
-                "customers",
-                "routes",
-                "cost",
-                "best_known",
-                "gap_pct",
-                "runtime_s",
-            ],
-        )
-
+        writer = csv.DictWriter(f, fieldnames=csv_fields)
         if write_header:
             writer.writeheader()
+        writer.writerow({key: result[key] for key in csv_fields})
 
-        writer.writerow(
-            {
-                "instance": "X-n101-k25",
-                "method": "PyVRP",
-                "seed": SEED,
-                "time_limit_s": TIME_LIMIT_SECONDS,
-                "customers": data.num_clients,
-                "routes": num_routes,
-                "cost": cost,
-                "best_known": BEST_KNOWN,
-                "gap_pct": round(gap_pct, 4),
-                "runtime_s": round(result.runtime, 4),
-            }
-        )
-
-    # 5) Save the actual routes for inspection.
-    ROUTES.write_text(str(result.best), encoding="utf-8")
+    ROUTES.write_text(result["route_text"], encoding="utf-8")
 
 
 if __name__ == "__main__":
