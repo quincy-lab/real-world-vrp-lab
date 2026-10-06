@@ -10,8 +10,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 INSTANCE = PROJECT_ROOT / "data" / "X-n101-k25.vrp"
 OUTPUT = PROJECT_ROOT / "results" / "benchmark_x-n101-k25.csv"
 
-# Four points are enough for the first runtime-quality curve without making
-# the experiment unnecessarily long. We can add 60s later.
 TIME_LIMITS = [1, 5, 10, 30]
 
 COMMON_FIELDS = [
@@ -24,6 +22,8 @@ COMMON_FIELDS = [
     "best_known",
     "benchmark_gap_pct",
     "runtime_s",
+    "mip_best_bound",
+    "mip_gap_pct",
 ]
 
 
@@ -36,7 +36,7 @@ def main():
 
     results = []
 
-    # Core benchmark loop: same instance and same time budgets for every solver.
+    # Same instance + same time budget: the core of the benchmark.
     for time_limit in TIME_LIMITS:
         for name, solver in solvers:
             print(f"\n===== Running {name}: {time_limit}s =====")
@@ -51,7 +51,7 @@ def main():
 
         for result in results:
             writer.writerow({
-                key: result[key]
+                key: result.get(key, "")
                 for key in COMMON_FIELDS
             })
 
@@ -63,9 +63,13 @@ def main():
         f"{'Routes':>10}"
         f"{'Cost':>10}"
         f"{'Gap(%)':>12}"
+        f"{'MIP Gap(%)':>14}"
     )
 
     for result in results:
+        mip_gap = result.get("mip_gap_pct")
+        mip_gap_text = "" if mip_gap is None else f"{mip_gap:.3f}"
+
         print(
             f"{result['method']:<12}"
             f"{result['time_limit_s']:>12}"
@@ -73,6 +77,7 @@ def main():
             f"{result['routes']:>10}"
             f"{result['cost']:>10}"
             f"{result['benchmark_gap_pct']:>12.3f}"
+            f"{mip_gap_text:>14}"
         )
 
     print(f"\nSaved: {OUTPUT}")
