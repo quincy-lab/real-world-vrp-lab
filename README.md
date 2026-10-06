@@ -4,40 +4,61 @@ A reproducible benchmark project for comparing classical optimization, routing s
 
 ## Goal
 
-Build a unified experimental pipeline for Vehicle Routing Problems (VRP), starting from mature classical solvers and standard benchmarks, then extending to real-world road-network data and learning-based optimization.
+Build a unified experimental pipeline for Vehicle Routing Problems (VRP), starting from mature classical solvers and standard benchmarks, then extending to real-world constraints and learning-based optimization.
 
-## Planned methods
+## Methods
 
 - **PyVRP / ILS** — high-performance VRP solving and benchmark baseline
 - **OR-Tools** — engineering-oriented routing solver
 - **COPT** — mathematical programming / MIP formulation
-- **Custom heuristics** — nearest neighbor, 2-opt, simulated annealing
-- **Learning-based methods** — RRNCO / RL4CO / Attention Model (later stage)
+- **Custom heuristics** — 2-opt and other neighborhood operators
+- **Learning-based methods** — RL4CO / Attention Model, with road-network NCO as a later extension
 
 ## Evaluation
 
-We will compare methods using:
-
-- solution cost
-- optimality / best-known gap
-- runtime
-- scalability
-- route visualization
+We compare methods using solution cost, best-known gap, runtime, scalability, and route visualizations. For MIP experiments we also distinguish solver proof gap from external benchmark gap.
 
 ## Project structure
 
 ```text
 real-world-vrp-lab/
-├── data/           # benchmark and real-world instances
-├── src/            # solver wrappers and algorithms
+├── data/           # CVRPLIB / Solomon benchmark instances
+├── src/            # solver wrappers and custom algorithms
 ├── experiments/    # reproducible experiment scripts
 ├── results/        # tables and logs
 ├── figures/        # route and benchmark visualizations
+├── requirements.txt
+├── requirements-learning.txt
 └── README.md
 ```
 
-## Current stage
+## Progress
 
-**Stage 1 — PyVRP + standard VRP benchmarks**
+- [x] Standard CVRP benchmark (X-n101-k25)
+- [x] Custom 2-opt neighborhood operator
+- [x] PyVRP baseline
+- [x] OR-Tools baseline
+- [x] COPT MIP formulation and route extraction
+- [x] Unified runtime-quality benchmark
+- [x] CVRPTW / Solomon RC208 baseline
+- [ ] RL4CO Attention Model: state -> action -> reward -> learning
+- [ ] Classical vs learning-based evaluation
+- [ ] Real-road-network extension
 
-The first milestone is to run a mature VRP solver on standard benchmark instances, understand the input/output pipeline, and build a reproducible baseline before adding other solvers.
+## Learning-based experiment
+
+`experiments/run_rl4co_am_cvrp.py` is intentionally a small learning experiment rather than a competitive benchmark. It exposes the four pieces that matter for understanding neural combinatorial optimization:
+
+```text
+CVRPEnv state
+    ↓
+AttentionModelPolicy
+    ↓
+customer actions / route
+    ↓
+negative route length reward
+    ↓
+REINFORCE policy update
+```
+
+Learning dependencies are kept in `requirements-learning.txt` so the existing classical-OR environment remains independent. The learning stack is best run in a dedicated Python 3.12 environment before larger experiments are attempted.
