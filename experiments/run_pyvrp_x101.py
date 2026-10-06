@@ -5,9 +5,10 @@ from pyvrp import read, solve
 from pyvrp.stop import MaxRuntime
 
 
-INSTANCE = Path("data/X-n101-k25.vrp")
-RESULTS = Path("results/pyvrp_x-n101-k25.csv")
-ROUTES = Path("results/pyvrp_x-n101-k25_routes.txt")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+INSTANCE = PROJECT_ROOT / "data" / "X-n101-k25.vrp"
+RESULTS = PROJECT_ROOT / "results" / "pyvrp_x-n101-k25.csv"
+ROUTES = PROJECT_ROOT / "results" / "pyvrp_x-n101-k25_routes.txt"
 
 BEST_KNOWN = 27_591
 TIME_LIMIT_SECONDS = 10
