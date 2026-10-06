@@ -1,4 +1,6 @@
 pyvrp
 vrplib
+ortools
+numpy
 matplotlib
 pandas
