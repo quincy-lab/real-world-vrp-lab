@@ -17,27 +17,30 @@ NUM_VEHICLES = 100
 TIME_LIMIT_SECONDS = 10
 
 
-def main():
-    # 1) Read the same CVRPLIB benchmark used by the PyVRP baseline.
-    instance = vrplib.read_instance(INSTANCE)
+def benchmark_gap(cost, best_known=BEST_KNOWN):
+    return 100 * (cost - best_known) / best_known
 
-    # Set X uses rounded Euclidean distances in benchmark evaluations.
+
+def solve_ortools(
+    instance_path=INSTANCE,
+    time_limit=TIME_LIMIT_SECONDS,
+    num_vehicles=NUM_VEHICLES,
+):
+    """Solve one CVRP instance with OR-Tools and return unified benchmark metrics."""
+    instance = vrplib.read_instance(instance_path)
+
     distance_matrix = np.floor(instance["edge_weight"] + 0.5).astype(np.int64)
     demands = instance["demand"].astype(np.int64)
     capacity = int(instance["capacity"])
     depot = int(instance["depot"][0])
 
-    # 2) Manager: translates our node IDs to OR-Tools internal indices.
     manager = pywrapcp.RoutingIndexManager(
         len(distance_matrix),
-        NUM_VEHICLES,  # maximum available fleet; unused vehicles are allowed
+        num_vehicles,
         depot,
     )
-
-    # 3) Model: represents the routing decisions.
     routing = pywrapcp.RoutingModel(manager)
 
-    # 4) Distance callback: tells OR-Tools the travel cost from A to B.
     def distance_callback(from_index, to_index):
         from_node = manager.IndexToNode(from_index)
         to_node = manager.IndexToNode(to_index)
@@ -46,22 +49,19 @@ def main():
     distance_callback_index = routing.RegisterTransitCallback(distance_callback)
     routing.SetArcCostEvaluatorOfAllVehicles(distance_callback_index)
 
-    # 5) Demand callback + Capacity Dimension: enforce vehicle capacity 206.
     def demand_callback(from_index):
         from_node = manager.IndexToNode(from_index)
         return int(demands[from_node])
 
     demand_callback_index = routing.RegisterUnaryTransitCallback(demand_callback)
-
     routing.AddDimensionWithVehicleCapacity(
         demand_callback_index,
         0,
-        [capacity] * NUM_VEHICLES,
+        [capacity] * num_vehicles,
         True,
         "Capacity",
     )
 
-    # 6) Search: build an initial solution, then improve it with GLS.
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
     search_parameters.first_solution_strategy = (
         routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION
@@ -69,19 +69,17 @@ def main():
     search_parameters.local_search_metaheuristic = (
         routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
     )
-    search_parameters.time_limit.FromSeconds(TIME_LIMIT_SECONDS)
+    search_parameters.time_limit.FromSeconds(int(time_limit))
 
     start = perf_counter()
     solution = routing.SolveWithParameters(search_parameters)
     runtime = perf_counter() - start
 
     if solution is None:
-        print("OR-Tools did not find a feasible solution.")
-        return
+        raise RuntimeError("OR-Tools did not find a feasible solution.")
 
-    # 7) Extract routes and benchmark metrics.
     routes = []
-    for vehicle_id in range(NUM_VEHICLES):
+    for vehicle_id in range(num_vehicles):
         if not routing.IsVehicleUsed(solution, vehicle_id):
             continue
 
@@ -96,59 +94,64 @@ def main():
         routes.append(route)
 
     cost = int(solution.ObjectiveValue())
-    gap_pct = 100 * (cost - BEST_KNOWN) / BEST_KNOWN
-
-    print("\n=== OR-Tools experiment summary ===")
-    print("instance      : X-n101-k25")
-    print(f"customers     : {len(demands) - 1}")
-    print(f"routes used   : {len(routes)}")
-    print(f"solution cost : {cost}")
-    print(f"best known    : {BEST_KNOWN}")
-    print(f"gap (%)       : {gap_pct:.3f}")
-    print(f"runtime (s)   : {runtime:.3f}")
-
-    # 8) Save metrics for the later unified benchmark.
-    RESULTS.parent.mkdir(parents=True, exist_ok=True)
-    write_header = not RESULTS.exists()
-
-    with RESULTS.open("a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(
-            f,
-            fieldnames=[
-                "instance",
-                "method",
-                "time_limit_s",
-                "customers",
-                "routes",
-                "cost",
-                "best_known",
-                "gap_pct",
-                "runtime_s",
-            ],
-        )
-
-        if write_header:
-            writer.writeheader()
-
-        writer.writerow(
-            {
-                "instance": "X-n101-k25",
-                "method": "OR-Tools",
-                "time_limit_s": TIME_LIMIT_SECONDS,
-                "customers": len(demands) - 1,
-                "routes": len(routes),
-                "cost": cost,
-                "best_known": BEST_KNOWN,
-                "gap_pct": round(gap_pct, 4),
-                "runtime_s": round(runtime, 4),
-            }
-        )
-
     route_text = "\n".join(
         f"Route #{idx + 1}: " + " -> ".join(map(str, route))
         for idx, route in enumerate(routes)
     )
-    ROUTES.write_text(route_text, encoding="utf-8")
+
+    return {
+        "instance": Path(instance_path).stem,
+        "method": "OR-Tools",
+        "time_limit_s": time_limit,
+        "customers": len(demands) - 1,
+        "routes": len(routes),
+        "cost": cost,
+        "best_known": BEST_KNOWN,
+        "benchmark_gap_pct": benchmark_gap(cost),
+        "runtime_s": runtime,
+        "route_text": route_text,
+    }
+
+
+def main():
+    result = solve_ortools()
+
+    print("\n=== OR-Tools experiment summary ===")
+    for key in [
+        "instance",
+        "customers",
+        "routes",
+        "cost",
+        "best_known",
+        "benchmark_gap_pct",
+        "runtime_s",
+    ]:
+        value = result[key]
+        if isinstance(value, float):
+            value = f"{value:.3f}"
+        print(f"{key:18}: {value}")
+
+    RESULTS.parent.mkdir(parents=True, exist_ok=True)
+    write_header = not RESULTS.exists()
+    csv_fields = [
+        "instance",
+        "method",
+        "time_limit_s",
+        "customers",
+        "routes",
+        "cost",
+        "best_known",
+        "benchmark_gap_pct",
+        "runtime_s",
+    ]
+
+    with RESULTS.open("a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=csv_fields)
+        if write_header:
+            writer.writeheader()
+        writer.writerow({key: result[key] for key in csv_fields})
+
+    ROUTES.write_text(result["route_text"], encoding="utf-8")
 
 
 if __name__ == "__main__":
