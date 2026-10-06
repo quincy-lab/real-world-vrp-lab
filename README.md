@@ -8,7 +8,7 @@ Build a unified experimental pipeline for Vehicle Routing Problems (VRP), starti
 
 ## Planned methods
 
-- **PyVRP / HGS** — high-performance VRP solving and benchmark baseline
+- **PyVRP / ILS** — high-performance VRP solving and benchmark baseline
 - **OR-Tools** — engineering-oriented routing solver
 - **COPT** — mathematical programming / MIP formulation
 - **Custom heuristics** — nearest neighbor, 2-opt, simulated annealing
