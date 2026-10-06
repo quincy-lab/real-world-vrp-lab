@@ -13,7 +13,7 @@ RESULTS = PROJECT_ROOT / "results" / "ortools_x-n101-k25.csv"
 ROUTES = PROJECT_ROOT / "results" / "ortools_x-n101-k25_routes.txt"
 
 BEST_KNOWN = 27_591
-NUM_VEHICLES = 25
+NUM_VEHICLES = 100
 TIME_LIMIT_SECONDS = 10
 
 
@@ -30,7 +30,7 @@ def main():
     # 2) Manager: translates our node IDs to OR-Tools internal indices.
     manager = pywrapcp.RoutingIndexManager(
         len(distance_matrix),
-        NUM_VEHICLES,
+        NUM_VEHICLES,  # maximum available fleet; unused vehicles are allowed
         depot,
     )
 
