@@ -1,0 +1,4 @@
+# Learning-based optimization dependencies.
+# RL4CO's current documentation recommends a Python 3.12 environment.
+# Keep this separate from requirements.txt so the classical-OR environment stays lightweight.
+rl4co==0.6.0
